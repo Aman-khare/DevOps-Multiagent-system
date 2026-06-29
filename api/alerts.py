@@ -65,12 +65,15 @@ async def _run_agent_pipeline(incident_id: str, alert_data: dict):
     db = await get_db()
 
     try:
+        # Mark incident as actively being diagnosed
         await db.update_incident(incident_id, {"status": "diagnosing"})
         await manager.send_incident_update(incident_id, "diagnosing")
         await manager.send_agent_update(
             incident_id, "CoordinatorAgent", "Starting incident analysis", "running"
         )
 
+        # Initialize the ADK Coordinator and the session context
+        # We use an InMemorySessionService to maintain conversation state across agent delegations
         coordinator = build_coordinator_agent()
         session_service = InMemorySessionService()
         runner = Runner(
@@ -79,11 +82,14 @@ async def _run_agent_pipeline(incident_id: str, alert_data: dict):
             session_service=session_service,
         )
 
+        # Create an isolated session for this specific incident run
         session = await session_service.create_session(
             app_name="devops_ai_architect",
             user_id="system",
         )
 
+        # Construct the initial prompt containing all alert context
+        # This acts as the entry point for the Coordinator Agent
         alert_prompt = f"""
 INCOMING ALERT - Incident ID: {incident_id}
 
@@ -108,6 +114,9 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
             parts=[types.Part(text=alert_prompt)],
         )
 
+        # Execute the agent runner asynchronously.
+        # This yields events in real-time as the Coordinator delegates to sub-agents,
+        # sub-agents use tools, and results are returned.
         async for event in runner.run_async(
             user_id="system",
             session_id=session.id,
@@ -118,6 +127,7 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
 
                 if hasattr(event, "content") and event.content:
                     for part in event.content.parts:
+                        # Handle text responses (reasoning and communication between agents)
                         if hasattr(part, "text") and part.text:
                             trace_entry = {
                                 "timestamp": datetime.now(UTC).isoformat(),
@@ -129,6 +139,7 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
                             agent_trace.append(trace_entry)
                             final_response = part.text
 
+                            # Broadcast the agent's current activity to the UI
                             await manager.send_agent_update(
                                 incident_id,
                                 agent_name,
@@ -141,6 +152,7 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
                                 part.text[:200],
                             )
 
+                        # Handle tool invocations (e.g. running a shell command, fetching logs)
                         if hasattr(part, "function_call") and part.function_call:
                             fc = part.function_call
                             trace_entry = {
@@ -153,6 +165,7 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
                             }
                             agent_trace.append(trace_entry)
 
+                            # Notify the UI that a specific tool is being executed
                             await manager.send_agent_update(
                                 incident_id,
                                 agent_name,
@@ -161,6 +174,7 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
                                 str(fc.args)[:200],
                             )
 
+                        # Handle tool results returning to the agent
                         if hasattr(part, "function_response") and part.function_response:
                             fr = part.function_response
                             trace_entry = {
@@ -173,14 +187,16 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
                             }
                             agent_trace.append(trace_entry)
 
+        # The pipeline has finished. Determine the final state based on the Coordinator's last message.
         response_lower = final_response.lower()
         if "resolved" in response_lower or "success" in response_lower:
             final_status = "resolved"
         elif "failed" in response_lower or "rollback" in response_lower:
             final_status = "failed"
         else:
-            final_status = "resolved"
+            final_status = "resolved"  # Default to resolved if ambiguous but execution completed
 
+        # Save the full execution trace and postmortem to the database
         await db.update_incident(incident_id, {
             "status": final_status,
             "agent_trace": agent_trace,
@@ -189,6 +205,7 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
             "resolved_at": datetime.now(UTC).isoformat() if final_status == "resolved" else None,
         })
 
+        # Broadcast the final incident resolution to the UI
         await manager.send_incident_update(incident_id, final_status, {
             "postmortem": final_response[:300] if final_response else "",
         })
@@ -197,6 +214,7 @@ Follow your full workflow: Diagnose -> Assess Infrastructure -> Remediate -> Ver
         )
 
     except Exception as e:
+        # Handle unexpected failures during the agent pipeline execution
         error_msg = f"Agent pipeline error: {str(e)}\n{traceback.format_exc()}"
         await db.update_incident(incident_id, {
             "status": "failed",

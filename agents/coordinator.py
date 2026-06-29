@@ -75,6 +75,9 @@ def build_coordinator_agent() -> LlmAgent:
     This is a factory function because the sub-agents need to be imported
     and assembled at runtime.
     """
+    # Initialize the LlmAgent using the Google ADK
+    # The 'sub_agents' parameter allows this agent to transfer control
+    # to the specialized agents defined elsewhere.
     coordinator = LlmAgent(
         name="CoordinatorAgent",
         model="gemini-2.0-flash",
@@ -88,3 +91,4 @@ def build_coordinator_agent() -> LlmAgent:
         description="Root orchestrator that manages the full incident lifecycle by delegating to specialized sub-agents.",
     )
     return coordinator
+

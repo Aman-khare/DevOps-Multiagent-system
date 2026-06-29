@@ -39,10 +39,15 @@ _execution_history: list[dict] = []
 
 def _is_command_safe(command: str) -> tuple[bool, str]:
     """Check a command against the blocklist. Returns (is_safe, reason)."""
+    # Normalize whitespace to prevent evasion via extra spaces
     normalized = " ".join(command.strip().split())
+    
+    # Iterate through pre-compiled regex patterns
+    # Using regex allows us to catch variations (e.g. 'rm -rf /' vs 'rm -f -r /')
     for pattern in _COMPILED_BLOCKLIST:
         if pattern.search(normalized):
             return False, f"Blocked by safety rule: {pattern.pattern}"
+            
     return True, "Command passed safety check"
 
 
