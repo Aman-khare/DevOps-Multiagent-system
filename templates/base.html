@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Autonomous DevOps AI Architect — Zero-touch multi-agent incident resolution system">
+    <title>{% block title %}DevOps AI Architect{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="/" class="navbar__brand">
+            <span class="navbar__logo">🤖</span>
+            <div>
+                <div class="navbar__title">DevOps AI Architect</div>
+                <div class="navbar__subtitle">Autonomous Incident Resolution</div>
+            </div>
+        </a>
+        <div class="navbar__actions">
+            <div id="ws-status-dot" class="navbar__status-dot"></div>
+            <span id="ws-status-text" class="navbar__status-text">Connecting...</span>
+            <a href="/api/v1/alerts/simulate" class="btn btn--primary"
+               onclick="event.preventDefault(); simulateAlert();">
+                ⚡ Simulate Alert
+            </a>
+        </div>
+    </nav>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Main Content -->
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Scripts -->
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        async function simulateAlert() {
+            try {
+                const response = await fetch('/api/v1/alerts/simulate', { method: 'POST' });
+                const data = await response.json();
+                if (data.incident_id) {
+                    // Toast will be shown via WebSocket
+                    console.log('Simulated alert:', data.incident_id);
+                    // Reload page to show new incident after a brief delay
+                    setTimeout(() => window.location.reload(), 1500);
+                }
+            } catch (e) {
+                console.error('Failed to simulate alert:', e);
+            }
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}{{ incident.id }} — DevOps AI Architect{% endblock %}
+
+{% block content %}
+<!-- Back Button -->
+<div style="margin-bottom: var(--space-lg);">
+    <a href="/" class="btn btn--ghost">← Back to Dashboard</a>
+    {% if incident.status == 'resolved' %}
+    <a href="/postmortem/{{ incident.id }}" class="btn btn--primary" style="margin-left: var(--space-sm);">
+        📄 View Post-Mortem
+    </a>
+    {% endif %}
+</div>
+
+<!-- Incident Header -->
+<div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-xl); margin-bottom: var(--space-xl);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-md);">
+        <div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent-primary); margin-bottom: var(--space-xs);">
+                {{ incident.id }}
+            </div>
+            <h1 style="font-size: 1.3rem; font-weight: 700; margin-bottom: var(--space-sm);">
+                {{ incident.message }}
+            </h1>
+            <div style="display: flex; gap: var(--space-lg); font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap;">
+                <span>📦 Service: <strong style="color: var(--text-secondary);">{{ incident.service }}</strong></span>
+                <span>🏷️ Type: <strong style="color: var(--text-secondary);">{{ incident.alert_type }}</strong></span>
+                <span>🔥 Severity: <strong style="color: var(--text-secondary);">{{ incident.severity }}</strong></span>
+                {% if incident.container_id %}
+                <span>📦 Container: <strong style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">{{ incident.container_id }}</strong></span>
+                {% endif %}
+                <span>🕐 Created: <strong style="color: var(--text-secondary);">{{ incident.created_at[:19] }}</strong></span>
+            </div>
+        </div>
+        <span class="status-badge status-badge--{{ incident.status }}" style="font-size: 0.85rem; padding: 6px 16px;">
+            <span class="status-badge__dot"></span>
+            {{ incident.status }}
+        </span>
+    </div>
+
+    {% if incident.root_cause %}
+    <div style="margin-top: var(--space-lg); padding: var(--space-md); background: var(--bg-elevated); border-radius: var(--radius-sm); border-left: 3px solid var(--accent-primary);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: var(--space-xs);">Root Cause</div>
+        <div style="font-size: 0.9rem; color: var(--text-secondary);">{{ incident.root_cause }}</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Agent Trace Timeline -->
+<div class="section-header">
+    <h2 class="section-header__title">
+        🧠 Agent Trace Timeline
+        <span class="section-header__badge">{{ incident.agent_trace|length }} steps</span>
+    </h2>
+</div>
+
+{% if incident.agent_trace %}
+<div class="trace-timeline">
+    {% for entry in incident.agent_trace %}
+    <div class="trace-entry {% if entry.tool_name %}trace-entry--tool{% elif entry.status == 'error' %}trace-entry--error{% else %}trace-entry--success{% endif %}">
+        <div class="trace-entry__header">
+            <span class="trace-entry__agent">{{ entry.agent_name }}</span>
+            <span class="trace-entry__time">{{ entry.timestamp[:19] if entry.timestamp else '' }}</span>
+        </div>
+
+        {% if entry.tool_name %}
+        <div class="trace-entry__tool-badge">🔧 {{ entry.tool_name }}</div>
+        {% endif %}
+
+        <div class="trace-entry__content">
+            {% if entry.reasoning %}
+                {{ entry.reasoning }}
+            {% elif entry.tool_input %}
+                <strong>Input:</strong> {{ entry.tool_input }}<br>
+                {% if entry.tool_output %}
+                <strong>Output:</strong> {{ entry.tool_output[:300] }}
+                {% endif %}
+            {% else %}
+                {{ entry.action }}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state__icon">⏳</div>
+    <div class="empty-state__title">Waiting for Agent Activity</div>
+    <div class="empty-state__text">The agent trace will appear here as agents work on this incident.</div>
+</div>
+{% endif %}
+
+<!-- Audit Logs -->
+{% if audit_logs %}
+<div style="margin-top: var(--space-2xl);">
+    <div class="section-header">
+        <h2 class="section-header__title">🔒 Audit Log</h2>
+    </div>
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+            <thead>
+                <tr style="background: var(--bg-elevated); text-align: left;">
+                    <th style="padding: var(--space-md); color: var(--text-muted); font-weight: 600;">Time</th>
+                    <th style="padding: var(--space-md); color: var(--text-muted); font-weight: 600;">Agent</th>
+                    <th style="padding: var(--space-md); color: var(--text-muted); font-weight: 600;">Command</th>
+                    <th style="padding: var(--space-md); color: var(--text-muted); font-weight: 600;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in audit_logs %}
+                <tr style="border-top: 1px solid var(--border-subtle);">
+                    <td style="padding: var(--space-md); font-family: 'JetBrains Mono', monospace; color: var(--text-muted);">{{ log.executed_at[:19] }}</td>
+                    <td style="padding: var(--space-md); color: var(--accent-primary);">{{ log.agent_name }}</td>
+                    <td style="padding: var(--space-md); font-family: 'JetBrains Mono', monospace; color: var(--text-secondary);">{{ log.command }}</td>
+                    <td style="padding: var(--space-md);">
+                        <span class="status-badge status-badge--{{ 'resolved' if log.status == 'success' else 'failed' }}">
+                            {{ log.status }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

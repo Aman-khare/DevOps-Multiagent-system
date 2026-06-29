@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — DevOps AI Architect{% endblock %}
+
+{% block content %}
+<!-- Stats Row -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-card__label">Active Incidents</div>
+        <div id="stat-active" class="stat-card__value stat-card__value--warning">{{ active_count }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Resolved</div>
+        <div id="stat-resolved" class="stat-card__value stat-card__value--success">{{ resolved_count }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Failed</div>
+        <div id="stat-failed" class="stat-card__value stat-card__value--critical">{{ failed_count }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Total Incidents</div>
+        <div id="stat-total" class="stat-card__value stat-card__value--info">{{ incidents|length }}</div>
+    </div>
+</div>
+
+<!-- Incidents Section -->
+<div class="section-header">
+    <h1 class="section-header__title">
+        📋 Incidents
+        {% if active_count > 0 %}
+        <span class="section-header__badge">{{ active_count }} active</span>
+        {% endif %}
+    </h1>
+    <a href="/api/v1/incidents" class="btn btn--ghost">View API →</a>
+</div>
+
+<div id="incidents-grid" class="incidents-grid">
+    {% if incidents %}
+        {% for incident in incidents %}
+        <a href="/incident/{{ incident.id }}"
+           class="incident-card {% if incident.status in ['diagnosing', 'remediating', 'verifying'] %}incident-card--active{% elif incident.status == 'resolved' %}incident-card--resolved{% elif incident.status == 'failed' %}incident-card--failed{% endif %}"
+           data-incident-id="{{ incident.id }}">
+
+            <div class="incident-card__severity incident-card__severity--{{ incident.severity }}">
+                {% if incident.severity == 'critical' %}🔴{% elif incident.severity == 'warning' %}🟡{% else %}🔵{% endif %}
+            </div>
+
+            <div class="incident-card__body">
+                <div class="incident-card__id">{{ incident.id }}</div>
+                <div class="incident-card__message">{{ incident.message }}</div>
+                <div class="incident-card__meta">
+                    <span class="incident-card__meta-item">📦 {{ incident.service }}</span>
+                    <span class="incident-card__meta-item">🏷️ {{ incident.alert_type }}</span>
+                    <span class="incident-card__meta-item">🕐 {{ incident.created_at[:19] }}</span>
+                </div>
+            </div>
+
+            <div class="incident-card__status">
+                <span class="status-badge status-badge--{{ incident.status }}">
+                    <span class="status-badge__dot"></span>
+                    {{ incident.status }}
+                </span>
+            </div>
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-state__icon">🛡️</div>
+            <div class="empty-state__title">All Systems Operational</div>
+            <div class="empty-state__text">
+                No incidents detected. Click "⚡ Simulate Alert" in the navbar to test the system,
+                or send a POST request to <code>/api/v1/alerts</code>.
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Live Agent Feed -->
+<div class="live-feed">
+    <div class="live-feed__header">
+        <div class="live-feed__title">
+            <span class="live-feed__dot"></span>
+            Live Agent Activity
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">WebSocket</span>
+    </div>
+    <div id="live-feed-body" class="live-feed__body">
+        <div class="live-feed__entry" style="color: var(--text-muted);">
+            Waiting for agent activity... Simulate an alert to see agents in action.
+        </div>
+    </div>
+</div>
+{% endblock %}
